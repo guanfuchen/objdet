@@ -71,8 +71,8 @@ class SSDBoxCoder:
         self.fm_num = len(self.fm_sizes)
         self.aspect_ratios = ssd_model.aspect_ratios
         self.box_sizes = ssd_model.box_sizes
-        self.default_boxes = self._get_default_boxes()
         self.variances = (0.1, 0.2)
+        self.default_boxes = self._get_default_boxes()
 
     def _get_default_boxes(self):
         """

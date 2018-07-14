@@ -8,6 +8,12 @@
 - ...
 
 ---
+### 论文资料
+
+- [DeNet: Scalable Real-time Object Detection with Directed Sparse Sampling](https://arxiv.org/abs/1703.10295) 相关代码[denet](https://github.com/lachlants/denet)。
+- [Soft Proposal Networks for Weakly Supervised Object Localization](https://arxiv.org/pdf/1709.01829.pdf) 相关代码[SPN.pytorch](https://github.com/yeezhu/SPN.pytorch)
+
+---
 ### 网络实现
 
 - SSD，[ssd_understanding](doc/ssd_understanding.md)

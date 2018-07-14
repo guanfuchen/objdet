@@ -37,6 +37,5 @@ def train():
         optimizer.step()
 
 
-
 if __name__ == '__main__':
     train()

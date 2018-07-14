@@ -31,6 +31,7 @@ $$W_{out}=floor((W_{in}+2padding[1]-dilation[1](kernerl\_size[1]-1)-1)/stride[1]
 - [[Learning Note] Single Shot MultiBox Detector with Pytorch — Part 1](https://towardsdatascience.com/learning-note-single-shot-multibox-detector-with-pytorch-part-1-38185e84bd79) part1-3，解释得相对浅显，可以参考。
 - [深度学习论文笔记：SSD](http://jacobkong.github.io/posts/3118967289/)
 - [Jaccard index](https://en.wikipedia.org/wiki/Jaccard_index) IOU计算。
+- [ssds.pytorch](https://github.com/ShuangXieIrene/ssds.pytorch) 该仓库实现了大量的SSD变种（pytorch），**参考**。
 
 ---
 ## 网络架构图
