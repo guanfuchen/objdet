@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import torch
+from torch import nn
 import random
 
 
@@ -122,3 +123,31 @@ def box_nms(bboxes, scores, threshold=0.5):
             break
         order = order[ids + 1]
     return torch.tensor(keep, dtype=torch.long)
+
+
+def roi_pooling(input, rois, size=(7, 7), spatial_scale=1.0):
+    """
+    roi pooling参考[roi_pooling.py](https://github.com/pytorch/examples/blob/d8d378c31d2766009db400ac03f41dd837a56c2a/fast_rcnn/roi_pooling.py#L38-L53)
+    :param input:
+    :param rois:
+    :param size:
+    :param spatial_scale:
+    :return:
+    """
+    assert (rois.dim() == 2)
+    assert (rois.size(1) == 5)
+    output = []
+    rois = rois.data.float()
+    num_rois = rois.size(0)
+
+    rois[:, 1:].mul_(spatial_scale)
+    rois = rois.long()
+    adaptive_max_pool = nn.AdaptiveMaxPool2d(size)
+    for i in range(num_rois):
+        roi = rois[i]
+        im_idx = roi[0]
+        im = input.narrow(0, im_idx, 1)[..., roi[2]:(roi[4] + 1), roi[1]:(roi[3] + 1)]
+        output.append(adaptive_max_pool(im))
+
+    return torch.cat(output, 0)
+
