@@ -95,6 +95,73 @@ R-CNN的目标之一是生成紧密适合对象边界的良好边界框。 R-CNN
     如下图所示可以看出RoI在Fast RCNN中的应用结构，其中fast-rcnn-VGG16-test.prototxt可视化可参考[fast-rcnn-VGG16-test.prototxt](https://gist.github.com/kudo1026/09c53e89ccc50c5adedc013d2b852698)
     ![](http://chenguanfuqq.gitee.io/tuquan2/img_2018_5/fast_rcnn_arch.png)
     
+    
+#### 网络层抽象整体结构
+
+![](http://chenguanfuqq.gitee.io/tuquan2/img_2018_5/faster_rcnn_abstract_arch.png)
+
+通过以上抽象整体结构，代码实现如下所示：
+
+```python
+
+class FasterRCNN(nn.Module):
+    def __init__(self, extractor, rpn, head):
+        """
+        :param extractor: FasterRCNN中特征提取网络，比如VGG16，ResNet50等
+        :param rpn: FasterRCNN中区域建议网络，生成ROI
+        :param head: FasterRCNN中定位分类模块，其中包括ROIPooling等
+        """
+        super(FasterRCNN, self).__init__()
+        self.extractor = extractor
+        self.rpn = rpn
+        self.head = head
+
+        # FasterRCNN中loc loss中归一化mean和std
+        self.loc_normalize_mean = [0., 0., 0., 0.]
+        self.loc_normalize_std = [0.1, 0.1, 0.2, 0.2]
+
+        self.nms_thresh = 0.3 # 非极大值抑制超参数nms，该参数在训练期间和测试期间可能不同
+        self.score_thresh = 0.7 # 非极大值抑制超参数score，该参数在训练期间和测试期间可能不同
+
+        self.num_classses = self.head.num_classses # 目标检测总数，包括背景区域，其中VOC为20+1共计21类
+
+    def forward(self, x, scale=1.0):
+        """
+        FasterRCNN前向传播，其中x表示输入图像变量，输出为roi_cls_loc，roi_scores，rois和roi_indices
+        :param x: input image Variable
+        :param scale: input image scale
+        :returns:
+            其中R表示输入到Head中的ROI数目，相当于batch_size，C表示总类别数
+            roi_cls_locs: roi每一类的locs，shape为(R,(C*4))
+            roi_scores: roi每一类的置信分数scores，shape为(R,C)
+            rois: 可能存在的前景roi，shape为(R，4)
+            roi_indices: 可能存在的前景roi的索引值，shape为(R，)
+        """
+        img_size = x.size[2:] # x.size为B*C*H*W
+
+        # 利用CNN提取图片特征features（原始论文用的是ZF和VGG16，后来人们又用ResNet101）
+        feature = self.extractor(x) # 网络特征提取器提取特征
+
+        # RPN区域建议网络通过图像的scale不同生成不同的anchor，以及rois，输出背景和前景scores，以及对应的前景的locs，同时对于组成输入到RPN Head的roi索引输出
+        # 前向传播中RPN负责提供候选区域rois（每张图给出大概2000个候选框），也就是rois和相应的提供的2000个左右的候选框的indices
+        rpn_locs, rpn_scores, rois, roi_indices, anchor = self.rpn(feature, img_size, scale) # 通过输入特征和相应的原图大小和尺度变换大小输入rois
+
+        # head部分是将提供的2000个左右的候选框通过ROIPooling进行类分数打分和每类位置微调回归
+        roi_cls_locs, roi_scores = self.head(feature, rois, roi_indices)
+
+        # 前向传播最后输出roi类相关的locs，roi类置信分数scores，rois区域建议，roi_indices，区域建议训练indices
+        # 最后输出rois和roi_indices表示候选的那些roi以及对应的微调locs和每类scores
+        # 负责对rois分类和微调。对RPN找出的rois，判断它是否包含目标，并修正框的位置和坐标
+        return roi_cls_locs, roi_scores, rois, roi_indices
+```
+
+#### 网络特征提取层
+
+网络特征提取层输入图像，输出特征，主要结构改进自分类网络VGG16、ResNet等等，下图所示为基于VGG16的网络特征提取层改进思路。
+
+![](http://chenguanfuqq.gitee.io/tuquan2/img_2018_5/faster_rcnn_vgg16_extractor.png)
+
+    
 ### 参考资料
 
 - [roi pooling层](https://www.cnblogs.com/ymjyqsx/p/7587051.html)
