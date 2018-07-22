@@ -10,6 +10,7 @@ import six
 from objdet.dataloader import faster_rcnn_data_utils
 from objdet.utils.config import faster_rcnn_config
 from objdet.layers.region_proposal_network import RegionProposalNetwork
+from objdet.nms.py_cpu_nms import py_cpu_nms
 
 
 class FasterRCNNBoxCoder:
@@ -204,11 +205,9 @@ class FasterRCNN(nn.Module):
             mask = prob_l > self.score_thresh
             cls_bbox_l = cls_bbox_l[mask]
             prob_l = prob_l[mask]
-            # keep = non_maximum_suppression(cp.array(cls_bbox_l), self.nms_thresh, prob_l)
-            # keep = cp.asnumpy(keep)
+            keep = py_cpu_nms(np.array(cls_bbox_l), self.nms_thresh, prob_l)
             # TODO
             # 实现non_maximum_suppression
-            keep = None
             bbox.append(cls_bbox_l[keep])
             # The labels are in [0, self.n_class - 2].
             label.append((l - 1) * np.ones((len(keep),)))

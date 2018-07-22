@@ -3,6 +3,7 @@ from torch.nn import functional as F
 from torch import nn
 
 from objdet.modelloader.faster_rcnn import faster_rcnn_boxcoder
+from objdet.nms.py_cpu_nms import py_cpu_nms
 
 
 class ProposalCreator:
@@ -138,10 +139,10 @@ class ProposalCreator:
 
         # unNOTE: somthing is wrong here!
         # TODO: remove cuda.to_gpu
-        # keep = non_maximum_suppression(np.ascontiguousarray(np.asarray(roi)), thresh=self.nms_thresh)
-        # if n_post_nms > 0:
-        #     keep = keep[:n_post_nms]
-        # roi = roi[keep]
+        keep = py_cpu_nms(np.ascontiguousarray(np.asarray(roi)), thresh=self.nms_thresh)
+        if n_post_nms > 0:
+            keep = keep[:n_post_nms]
+        roi = roi[keep]
         return roi
 
 class RegionProposalNetwork(nn.Module):
