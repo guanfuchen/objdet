@@ -9,6 +9,7 @@ import six
 
 from objdet.dataloader import faster_rcnn_data_utils
 from objdet.utils.config import faster_rcnn_config
+from objdet.layers.region_proposal_network import RegionProposalNetwork
 
 
 class FasterRCNNBoxCoder:
@@ -355,36 +356,40 @@ class FasterRCNNVGG16(FasterRCNN):
         :param anchor_ratios: 生成锚点的ratios比例
         :param anchor_scales: 生成锚点的scales尺度
         """
+        # 使用VGG16网络构建的网络特征提取器和分类器
         extractor, classifier = decomVGG16()
 
+        # 区域建议网络
+        rpn = RegionProposalNetwork(512, 512, anchor_ratios=anchor_ratios, anchor_scales=anchor_scales, feat_stride=self.feat_stride)
+
+        # 类相关区域分类微调网络
         head = VGG16ROIHead(num_classes=num_classes, roi_size=7, spatial_scale=(1. / self.feat_stride), classifier=classifier)
 
         super(FasterRCNNVGG16, self).__init__(extractor, rpn, head)
 
 
-# TODO
-# 实现RPN网络
-class RegionProposalNetwork(nn.Module):
-    def __init__(self, in_channels=512, mid_channels=512, anchor_ratios=[0.5, 1, 2], anchor_scales=[8, 16, 32], feat_stride=16):
-        """
-        区域建议网络，通过特征输入生成类无关的区域建议，也就是背景和目标
-        :param in_channels: 输入到RPN的特征通道数
-        :param mid_channels: 第一层扩大的卷积通道数
-        :param anchor_ratios: 锚点比例
-        :param anchor_scales: 锚点尺寸
-        :param feat_stride: 特征间隔
-        """
-        super(RegionProposalNetwork, self).__init__()
-        self.in_channels = in_channels
-        self.mid_channels = mid_channels
-        self.anchor_ratios = anchor_ratios
-        self.anchor_scales = anchor_scales
-        self.feat_stride = feat_stride
-
-        self.anchor_base = faster_rcnn_boxcoder.generate_anchor_base(anchor_scales=anchor_scales, anchor_ratios=anchor_ratios)
-
-    def forward(self, x):
-        pass
+# # 实现RPN网络
+# class RegionProposalNetwork(nn.Module):
+#     def __init__(self, in_channels=512, mid_channels=512, anchor_ratios=[0.5, 1, 2], anchor_scales=[8, 16, 32], feat_stride=16):
+#         """
+#         区域建议网络，通过特征输入生成类无关的区域建议，也就是背景和目标
+#         :param in_channels: 输入到RPN的特征通道数
+#         :param mid_channels: 第一层扩大的卷积通道数
+#         :param anchor_ratios: 锚点比例
+#         :param anchor_scales: 锚点尺寸
+#         :param feat_stride: 特征间隔
+#         """
+#         super(RegionProposalNetwork, self).__init__()
+#         self.in_channels = in_channels
+#         self.mid_channels = mid_channels
+#         self.anchor_ratios = anchor_ratios
+#         self.anchor_scales = anchor_scales
+#         self.feat_stride = feat_stride
+#
+#         self.anchor_base = faster_rcnn_boxcoder.generate_anchor_base(anchor_scales=anchor_scales, anchor_ratios=anchor_ratios)
+#
+#     def forward(self, x):
+#         pass
 
 
 class RoIPooling2D(nn.Module):

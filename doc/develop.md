@@ -2,7 +2,7 @@
 
 ---
 ## 开发日志
-- 增加faster rcnn模型，预期实现faster rcnn模型 TODO。
+- 增加faster rcnn模型，预期实现faster rcnn模型 TODO，参考faster_rcnn简化版本。
 
 ---
 ## 参考资料

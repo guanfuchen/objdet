@@ -1,13 +1,20 @@
 # faster rcnn
 
 ---
+## 网络模型变迁
+
+rcnn系列网络从RCNN、fast RCNN、faster RCNN到mask RCNN，从速度、精度和功能上不断提高，在目标检测领域内的应用非常广泛，如下图所示为RCNN网络结构的示意图。
+
+![](http://chenguanfuqq.gitee.io/tuquan2/img_2018_5/rcnn_arch_example.png)
+
+---
 ## 结构分析
 
-R-CNN使用神经网络解决两个主要问题：
+faster R-CNN使用神经网络解决两个主要问题：
 - 在输入图像中识别可能包含前景对象的区域（感兴趣区域 - ROI）
 - 计算每个ROI的对象类概率分布 - 即，计算ROI包含特定类的对象的概率。然后，用户可以选择具有最高概率的对象类作为分类结果。
 
-R-CNN由三种主要类型的网络组成：
+faster R-CNN由三种主要类型的网络组成：
 - Head
 - Region Proposal Network (RPN)
 - Classification Network
@@ -198,7 +205,7 @@ R-CNN训练较Faster R-CNN慢很多，具体数值如下所示：
 ## 参考资料
 
 - [Notes: From Faster R-CNN to Mask R-CNN](https://www.yuthon.com/2017/04/27/Notes-From-Faster-R-CNN-to-Mask-R-CNN/) Faster RCNN和Mask RCNN的笔记总结。
-- [Object Detection and Classification using R-CNNs](http://www.telesens.co/2018/03/11/object-detection-and-classification-using-r-cnns/) 目前来说总结最为详细的RCNN系列文章，其对应相关代码实现，结合[chainer-faster-rcnn](https://github.com/mitmul/chainer-faster-rcnn)来看。
+- [Object Detection and Classification using R-CNNs](http://www.telesens.co/2018/03/11/object-detection-and-classification-using-r-cnns/) 目前来说总结最为详细的RCNN系列文章，其对应相关代码实现，结合[chainer-faster-rcnn](https://github.com/mitmul/chainer-faster-rcnn)来看，其中官方仓库[chainercv faster_rcnn](https://github.com/chainer/chainercv/tree/master/chainercv/links/model/faster_rcnn)。
 - [Understanding Faster R-CNN for Object Detection](https://ardianumam.wordpress.com/2017/12/16/understanding-faster-r-cnn-for-object-detection/) 台湾 EECS Dept of NCTU 实验室的学生对于faster RCNN系列的讲解，值得参考。
 - [弄懂目标检测（Faster R-CNN）？看这篇就够了！](http://pancakeawesome.ink/%E5%BC%84%E6%87%82%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B(Faster-R-CNN))
 - [Faster R-CNN论文翻译——中文版](http://noahsnail.com/2018/01/03/2018-01-03-Faster%20R-CNN%E8%AE%BA%E6%96%87%E7%BF%BB%E8%AF%91%E2%80%94%E2%80%94%E4%B8%AD%E6%96%87%E7%89%88/) 相关论文翻译。
@@ -207,3 +214,7 @@ R-CNN训练较Faster R-CNN慢很多，具体数值如下所示：
 - [simple-faster-rcnn-pytorch](https://github.com/chenyuntc/simple-faster-rcnn-pytorch) 简化R-CNN的Pytorch实现，复制原论文的性能。
 - [从编程实现角度学习Faster R-CNN（附极简实现）](https://zhuanlan.zhihu.com/p/32404424) 中文Faster R-CNN实现博客，非常值得参考。
 - [fast_rcnn pytorch官方仓库示例代码](https://github.com/pytorch/examples/tree/d8d378c31d2766009db400ac03f41dd837a56c2a/fast_rcnn)
+- [FasterRCNN代码解读](http://blog.younggy.com/2018/01/24/FasterRCNN%E4%BB%A3%E7%A0%81%E8%A7%A3%E8%AF%BB/)
+- [物体检测之从RCNN到Faster RCNN](https://blog.csdn.net/Young_Gy/article/details/78873836) 对RCNN、Fast RCNN和Faster RCNN网络的讲解非常详细。
+- [FasterRCNN代码解读](https://blog.csdn.net/Young_Gy/article/details/79155011) 以上两篇文章都是对simple faster rcnn pytorch代码的相应解读，非常有参考价值。
+- [从编程实现角度学习Faster R-CNN（附极简实现）](https://zhuanlan.zhihu.com/p/32404424)
