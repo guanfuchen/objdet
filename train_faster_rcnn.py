@@ -8,30 +8,32 @@ import torch.nn.functional as F
 import numpy as np
 import fire
 
-# from objdet.modelloader import ssd
+from objdet.modelloader import faster_rcnn
 from objdet.utils.config import faster_rcnn_config
 
 
 def train(args):
     num_classses = 21
     faster_rcnn_config.parse(args)
-    # net = ssd.SSD300(num_classes=num_classses)
-    # ssd_box_coder = ssd.SSDBoxCoder(net)
-    #
-    # C, H, W = (3, 300, 300)
-    # x = Variable(torch.randn(1, C, H, W))
-    # boxes = torch.from_numpy(np.array([(0, 0, 100, 100), (25, 25, 125, 125), (200, 200, 250, 250), (0, 0, 300, 300)], dtype=np.float32))
-    # labels = torch.from_numpy(np.array([1, 2, 3, 4], dtype=np.long))
-    # loc_targets, cls_targets = ssd_box_coder.encode(boxes, labels)
-    # loc_targets = loc_targets[None, :]
-    # cls_targets = cls_targets[None, :]
-    # # print('loc_targets.size():{}'.format(loc_targets.size()))
-    # # print('cls_targets.size():{}'.format(cls_targets.size()))
-    #
+    net = faster_rcnn.FasterRCNNVGG16(num_classses=num_classses)
+    trainer = faster_rcnn.FasterRCNNTrainer(net)
+    C, H, W = (3, 300, 300)
+    x = Variable(torch.randn(1, C, H, W))
+    boxes = np.array([(0, 0, 100, 100), (0, 0, 100, 100), (0, 0, 100, 100)])[np.newaxis, :]
+    boxes = torch.from_numpy(boxes)
+    labels = np.array([1, 1, 1], dtype=np.long)[np.newaxis, :]
+    labels = torch.from_numpy(labels)
+    scale = 1.0
+
+    print("boxes.shape:", boxes.shape)
+    print("labels.shape:", labels.shape)
+
     # optimizer = optim.SGD(net.parameters(), lr=1e-5, momentum=0.9, weight_decay=5e-4)
     # criterion = ssd.SSDLoss(num_classes=num_classses)
     #
-    # for epoch in range(100):
+    for epoch in range(faster_rcnn_config.epoch):
+        pass
+        trainer.train_step(x, boxes, labels, scale)
     #     loc_preds, cls_preds = net(x)
     #     # print('loc_preds.size():{}'.format(loc_preds.size()))
     #     # print('cls_preds.size():{}'.format(cls_preds.size()))

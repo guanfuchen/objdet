@@ -9,15 +9,19 @@
 
 import numpy as np
 
-def py_cpu_nms(dets, thresh, scores):
+def py_cpu_nms(dets, thresh, scores=None):
     """Pure Python NMS baseline."""
     x1 = dets[:, 0]
     y1 = dets[:, 1]
     x2 = dets[:, 2]
     y2 = dets[:, 3]
 
+    n_dets = dets.shape[0]
     areas = (x2 - x1 + 1) * (y2 - y1 + 1)
-    order = scores.argsort()[::-1]
+    if scores is not None:
+        order = scores.argsort()[::-1]
+    else:
+        order = np.arange(n_dets, dtype=np.int32)
 
     keep = []
     while order.size > 0:

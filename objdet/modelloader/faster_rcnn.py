@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from collections import namedtuple
+
 from torch import nn
 import torch.nn.functional as F
 import torch
@@ -6,170 +8,16 @@ import torchvision
 from torch.autograd import Variable
 import numpy as np
 import six
+import time
+
+from torchnet.meter import ConfusionMeter, AverageValueMeter
 
 from objdet.dataloader import faster_rcnn_data_utils
 from objdet.utils.config import faster_rcnn_config
-from objdet.layers.region_proposal_network import RegionProposalNetwork
+from objdet.layers.region_proposal_network import RegionProposalNetwork, AnchorTargetCreator, ProposalTargetCreator
 from objdet.nms.py_cpu_nms import py_cpu_nms
+from objdet.utils.faster_rcnn_boxcoder import faster_rcnn_boxcoder
 
-
-class FasterRCNNBoxCoder:
-    def __init__(self):
-        pass
-
-    def loc2bbox(self, src_bbox, loc):
-        """Decode bounding boxes from bounding box offsets and scales.
-
-        Given bounding box offsets and scales computed by
-        :meth:`bbox2loc`, this function decodes the representation to
-        coordinates in 2D image coordinates.
-
-        Given scales and offsets :math:`t_y, t_x, t_h, t_w` and a bounding
-        box whose center is :math:`(y, x) = p_y, p_x` and size :math:`p_h, p_w`,
-        the decoded bounding box's center :math:`\\hat{g}_y`, :math:`\\hat{g}_x`
-        and size :math:`\\hat{g}_h`, :math:`\\hat{g}_w` are calculated
-        by the following formulas.
-
-        * :math:`\\hat{g}_y = p_h t_y + p_y`
-        * :math:`\\hat{g}_x = p_w t_x + p_x`
-        * :math:`\\hat{g}_h = p_h \\exp(t_h)`
-        * :math:`\\hat{g}_w = p_w \\exp(t_w)`
-
-        The decoding formulas are used in works such as R-CNN [#]_.
-
-        The output is same type as the type of the inputs.
-
-        .. [#] Ross Girshick, Jeff Donahue, Trevor Darrell, Jitendra Malik. \
-        Rich feature hierarchies for accurate object detection and semantic \
-        segmentation. CVPR 2014.
-
-        Args:
-            src_bbox (array): A coordinates of bounding boxes.
-                Its shape is :math:`(R, 4)`. These coordinates are
-                :math:`p_{ymin}, p_{xmin}, p_{ymax}, p_{xmax}`.
-            loc (array): An array with offsets and scales.
-                The shapes of :obj:`src_bbox` and :obj:`loc` should be same.
-                This contains values :math:`t_y, t_x, t_h, t_w`.
-
-        Returns:
-            array:
-            Decoded bounding box coordinates. Its shape is :math:`(R, 4)`. \
-            The second axis contains four values \
-            :math:`\\hat{g}_{ymin}, \\hat{g}_{xmin},
-            \\hat{g}_{ymax}, \\hat{g}_{xmax}`.
-
-        """
-
-        if src_bbox.shape[0] == 0:
-            return np.zeros((0, 4), dtype=loc.dtype)
-
-        src_bbox = src_bbox.astype(src_bbox.dtype, copy=False)
-
-        src_height = src_bbox[:, 2] - src_bbox[:, 0]
-        src_width = src_bbox[:, 3] - src_bbox[:, 1]
-        src_ctr_y = src_bbox[:, 0] + 0.5 * src_height
-        src_ctr_x = src_bbox[:, 1] + 0.5 * src_width
-
-        dy = loc[:, 0::4]
-        dx = loc[:, 1::4]
-        dh = loc[:, 2::4]
-        dw = loc[:, 3::4]
-
-        ctr_y = dy * src_height[:, np.newaxis] + src_ctr_y[:, np.newaxis]
-        ctr_x = dx * src_width[:, np.newaxis] + src_ctr_x[:, np.newaxis]
-        h = np.exp(dh) * src_height[:, np.newaxis]
-        w = np.exp(dw) * src_width[:, np.newaxis]
-
-        dst_bbox = np.zeros(loc.shape, dtype=loc.dtype)
-        dst_bbox[:, 0::4] = ctr_y - 0.5 * h
-        dst_bbox[:, 1::4] = ctr_x - 0.5 * w
-        dst_bbox[:, 2::4] = ctr_y + 0.5 * h
-        dst_bbox[:, 3::4] = ctr_x + 0.5 * w
-
-        return dst_bbox
-
-    def bbox2loc(self, src_bbox, dst_bbox):
-        """Encodes the source and the destination bounding boxes to "loc".
-
-        Given bounding boxes, this function computes offsets and scales
-        to match the source bounding boxes to the target bounding boxes.
-        Mathematcially, given a bounding box whose center is
-        :math:`(y, x) = p_y, p_x` and
-        size :math:`p_h, p_w` and the target bounding box whose center is
-        :math:`g_y, g_x` and size :math:`g_h, g_w`, the offsets and scales
-        :math:`t_y, t_x, t_h, t_w` can be computed by the following formulas.
-
-        * :math:`t_y = \\frac{(g_y - p_y)} {p_h}`
-        * :math:`t_x = \\frac{(g_x - p_x)} {p_w}`
-        * :math:`t_h = \\log(\\frac{g_h} {p_h})`
-        * :math:`t_w = \\log(\\frac{g_w} {p_w})`
-
-        The output is same type as the type of the inputs.
-        The encoding formulas are used in works such as R-CNN [#]_.
-
-        .. [#] Ross Girshick, Jeff Donahue, Trevor Darrell, Jitendra Malik. \
-        Rich feature hierarchies for accurate object detection and semantic \
-        segmentation. CVPR 2014.
-
-        Args:
-            src_bbox (array): An image coordinate array whose shape is
-                :math:`(R, 4)`. :math:`R` is the number of bounding boxes.
-                These coordinates are
-                :math:`p_{ymin}, p_{xmin}, p_{ymax}, p_{xmax}`.
-            dst_bbox (array): An image coordinate array whose shape is
-                :math:`(R, 4)`.
-                These coordinates are
-                :math:`g_{ymin}, g_{xmin}, g_{ymax}, g_{xmax}`.
-
-        Returns:
-            array:
-            Bounding box offsets and scales from :obj:`src_bbox` \
-            to :obj:`dst_bbox`. \
-            This has shape :math:`(R, 4)`.
-            The second axis contains four values :math:`t_y, t_x, t_h, t_w`.
-
-        """
-
-        height = src_bbox[:, 2] - src_bbox[:, 0]
-        width = src_bbox[:, 3] - src_bbox[:, 1]
-        ctr_y = src_bbox[:, 0] + 0.5 * height
-        ctr_x = src_bbox[:, 1] + 0.5 * width
-
-        base_height = dst_bbox[:, 2] - dst_bbox[:, 0]
-        base_width = dst_bbox[:, 3] - dst_bbox[:, 1]
-        base_ctr_y = dst_bbox[:, 0] + 0.5 * base_height
-        base_ctr_x = dst_bbox[:, 1] + 0.5 * base_width
-
-        eps = np.finfo(height.dtype).eps
-        height = np.maximum(height, eps)
-        width = np.maximum(width, eps)
-
-        dy = (base_ctr_y - ctr_y) / height
-        dx = (base_ctr_x - ctr_x) / width
-        dh = np.log(base_height / height)
-        dw = np.log(base_width / width)
-
-        loc = np.vstack((dy, dx, dh, dw)).transpose()
-        return loc
-
-    def generate_anchor_base(self, base_size=16, anchor_ratios=[0.5, 1, 2], anchor_scales=[8, 16, 32]):
-        py = base_size / 2.
-        px = base_size / 2.
-
-        anchor_base = np.zeros((len(anchor_ratios) * len(anchor_scales), 4),
-                               dtype=np.float32)
-        for i in six.moves.range(len(anchor_ratios)):
-            for j in six.moves.range(len(anchor_scales)):
-                h = base_size * anchor_scales[j] * np.sqrt(anchor_ratios[i])
-                w = base_size * anchor_scales[j] * np.sqrt(1. / anchor_ratios[i])
-                index = i * len(anchor_scales) + j
-                anchor_base[index, 0] = py - h / 2.
-                anchor_base[index, 1] = px - w / 2.
-                anchor_base[index, 2] = py + h / 2.
-                anchor_base[index, 3] = px + w / 2.
-        return anchor_base
-
-faster_rcnn_boxcoder = FasterRCNNBoxCoder()
 
 class FasterRCNN(nn.Module):
     def __init__(self, extractor, rpn, head):
@@ -316,6 +164,26 @@ class FasterRCNN(nn.Module):
         return bboxes, labels, scores
 
 
+    def get_optimizer(self):
+        """
+        return optimizer, It could be overwriten if you want to specify
+        special optimizer
+        """
+        lr = faster_rcnn_config.lr
+        params = []
+        for key, value in dict(self.named_parameters()).items():
+            if value.requires_grad:
+                if 'bias' in key:
+                    params += [{'params': [value], 'lr': lr * 2, 'weight_decay': 0}]
+                else:
+                    params += [{'params': [value], 'lr': lr, 'weight_decay': faster_rcnn_config.weight_decay}]
+        self.optimizer = torch.optim.SGD(params, momentum=0.9)
+        return self.optimizer
+
+    def scale_lr(self, decay=0.1):
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] *= decay
+        return self.optimizer
 
 
 def decomVGG16():
@@ -325,9 +193,10 @@ def decomVGG16():
     features = list(model.features)[:-1]
     classifier = list(model.classifier)
     # 其中classifier[2]和[5]为dropout，另外[6]为最后一层全连接层
-    del classifier[2]
-    del classifier[5]
+    # 从后往前删除不会影响要删除的分类器模块的次序
     del classifier[6]
+    del classifier[5]
+    del classifier[2]
     # 删除后重新序列化分类器
     classifier = nn.Sequential(*classifier)
 
@@ -348,7 +217,7 @@ class FasterRCNNVGG16(FasterRCNN):
     """
     feat_stride = 16 # VGG16卷积5的输出为原先分辨率的1／16
 
-    def __init__(self, num_classes=21, anchor_ratios=[0.5, 1, 2], anchor_scales=[8, 16, 32]):
+    def __init__(self, num_classses=21, anchor_ratios=[0.5, 1, 2], anchor_scales=[8, 16, 32]):
         """
         构造FasterRCNNVGG16目标检测模型
         :param num_classes: 不包括背景在内的目标类别
@@ -362,7 +231,8 @@ class FasterRCNNVGG16(FasterRCNN):
         rpn = RegionProposalNetwork(512, 512, anchor_ratios=anchor_ratios, anchor_scales=anchor_scales, feat_stride=self.feat_stride)
 
         # 类相关区域分类微调网络
-        head = VGG16ROIHead(num_classes=num_classes, roi_size=7, spatial_scale=(1. / self.feat_stride), classifier=classifier)
+
+        head = VGG16ROIHead(num_classses=num_classses, roi_size=7, spatial_scale=(1. / self.feat_stride), classifier=classifier)
 
         super(FasterRCNNVGG16, self).__init__(extractor, rpn, head)
 
@@ -430,10 +300,10 @@ class RoIPooling2D(nn.Module):
 
 
 class VGG16ROIHead(nn.Module):
-    def __init__(self, num_classes, roi_size, spatial_scale, classifier):
+    def __init__(self, num_classses, roi_size, spatial_scale, classifier):
         """
         基于VGG16的ROI Head网络，将ROI通过ROI Pooling层转换为相同roi_size的Feature Map（一般和VGG16输入fc6和fc7前的卷积维度相同，设置为7）
-        :param num_classes: 包括背景的目标类，用来输出最后的roi_cls_locs和roi_scores
+        :param num_classses: 包括背景的目标类，用来输出最后的roi_cls_locs和roi_scores
         :param roi_size: 通过ROI Pooling层转换后的roi_size*roi_size大小的卷积层
         :param spatial_scale: 该ROI相对于原始图像变换的空间缩放尺度大小
         :param classifier: fc6和fc7全连接分类器
@@ -441,7 +311,7 @@ class VGG16ROIHead(nn.Module):
         super(VGG16ROIHead, self).__init__()
 
         # 最后输出的检测目标（包括背景）的数量
-        self.num_classes = num_classes
+        self.num_classses = num_classses
         self.roi_size = roi_size
         self.spatial_scale = spatial_scale
 
@@ -452,8 +322,8 @@ class VGG16ROIHead(nn.Module):
 
 
         # 每一类的位置微调网络和置信度评分网络
-        self.cls_loc = nn.Linear(4096, self.num_classes*4)
-        self.score = nn.Linear(4096, self.num_classes*1)
+        self.cls_loc = nn.Linear(4096, self.num_classses*4)
+        self.score = nn.Linear(4096, self.num_classses*1)
 
 
         # ROIHead用于分类和回归的卷积层用0均值高斯初始化，同时方差分别为0.01和0.001
@@ -477,3 +347,229 @@ class VGG16ROIHead(nn.Module):
         roi_cls_locs = self.cls_loc(fc7)
         roi_scores = self.score(fc7)
         return roi_cls_locs, roi_scores
+
+
+LossTuple = namedtuple('LossTuple',
+                       ['rpn_loc_loss',
+                        'rpn_cls_loss',
+                        'roi_loc_loss',
+                        'roi_cls_loss',
+                        'total_loss'
+                        ])
+
+class FasterRCNNTrainer(nn.Module):
+    """wrapper for conveniently training. return losses
+
+    The losses include:
+
+    * :obj:`rpn_loc_loss`: The localization loss for \
+        Region Proposal Network (RPN).
+    * :obj:`rpn_cls_loss`: The classification loss for RPN.
+    * :obj:`roi_loc_loss`: The localization loss for the head module.
+    * :obj:`roi_cls_loss`: The classification loss for the head module.
+    * :obj:`total_loss`: The sum of 4 loss above.
+
+    Args:
+        faster_rcnn (model.FasterRCNN):
+            A Faster R-CNN model that is going to be trained.
+    """
+
+    def __init__(self, faster_rcnn):
+        super(FasterRCNNTrainer, self).__init__()
+
+        self.faster_rcnn = faster_rcnn
+        self.rpn_sigma = faster_rcnn_config.rpn_sigma
+        self.roi_sigma = faster_rcnn_config.roi_sigma
+
+        # target creator create gt_bbox gt_label etc as training targets.
+        self.anchor_target_creator = AnchorTargetCreator()
+        self.proposal_target_creator = ProposalTargetCreator()
+
+        self.loc_normalize_mean = faster_rcnn.loc_normalize_mean
+        self.loc_normalize_std = faster_rcnn.loc_normalize_std
+
+        self.optimizer = self.faster_rcnn.get_optimizer()
+
+        # indicators for training status
+        self.rpn_cm = ConfusionMeter(2)
+        self.roi_cm = ConfusionMeter(21)
+        self.meters = {k: AverageValueMeter() for k in LossTuple._fields}  # average loss
+
+    def forward(self, imgs, bboxes, labels, scale):
+        """Forward Faster R-CNN and calculate losses.
+
+        Here are notations used.
+
+        * :math:`N` is the batch size.
+        * :math:`R` is the number of bounding boxes per image.
+
+        Currently, only :math:`N=1` is supported.
+
+        Args:
+            imgs (~torch.autograd.Variable): A variable with a batch of images.
+            bboxes (~torch.autograd.Variable): A batch of bounding boxes.
+                Its shape is :math:`(N, R, 4)`.
+            labels (~torch.autograd..Variable): A batch of labels.
+                Its shape is :math:`(N, R)`. The background is excluded from
+                the definition, which means that the range of the value
+                is :math:`[0, L - 1]`. :math:`L` is the number of foreground
+                classes.
+            scale (float): Amount of scaling applied to
+                the raw image during preprocessing.
+
+        Returns:
+            namedtuple of 5 losses
+        """
+        n = bboxes.shape[0]
+        if n != 1:
+            raise ValueError('Currently only batch size 1 is supported.')
+
+        _, _, H, W = imgs.shape
+        img_size = (H, W)
+
+        features = self.faster_rcnn.extractor(imgs)
+
+        rpn_locs, rpn_scores, rois, roi_indices, anchor = \
+            self.faster_rcnn.rpn(features, img_size, scale)
+
+        # Since batch size is one, convert variables to singular form
+        bbox = bboxes[0]
+        label = labels[0]
+        rpn_score = rpn_scores[0]
+        rpn_loc = rpn_locs[0]
+        roi = rois
+
+        # Sample RoIs and forward
+        # it's fine to break the computation graph of rois,
+        # consider them as constant input
+        sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator(roi, bbox, label, self.loc_normalize_mean, self.loc_normalize_std)
+        # NOTE it's all zero because now it only support for batch=1 now
+        sample_roi_index = torch.zeros(len(sample_roi))
+        roi_cls_loc, roi_score = self.faster_rcnn.head(
+            features,
+            sample_roi,
+            sample_roi_index)
+
+        # ------------------ RPN losses -------------------#
+        gt_rpn_loc, gt_rpn_label = self.anchor_target_creator(bbox, anchor, img_size)
+        gt_rpn_label = Variable(gt_rpn_label).long()
+        gt_rpn_loc = Variable(gt_rpn_loc)
+        rpn_loc_loss = _fast_rcnn_loc_loss(
+            rpn_loc,
+            gt_rpn_loc,
+            gt_rpn_label.data,
+            self.rpn_sigma)
+
+        # NOTE: default value of ignore_index is -100 ...
+        rpn_cls_loss = F.cross_entropy(rpn_score, gt_rpn_label, ignore_index=-1)
+        _gt_rpn_label = gt_rpn_label[gt_rpn_label > -1]
+        _rpn_score = rpn_score[gt_rpn_label > -1]
+        self.rpn_cm.add(_rpn_score, _gt_rpn_label.data.long())
+
+        # ------------------ ROI losses (fast rcnn loss) -------------------#
+        n_sample = roi_cls_loc.shape[0]
+        roi_cls_loc = roi_cls_loc.view(n_sample, -1, 4)
+        roi_loc = roi_cls_loc[torch.arange(0, n_sample).long(), gt_roi_label.long()]
+        gt_roi_label = Variable(gt_roi_label).long()
+        gt_roi_loc = Variable(gt_roi_loc)
+
+        roi_loc_loss = _fast_rcnn_loc_loss(
+            roi_loc.contiguous(),
+            gt_roi_loc,
+            gt_roi_label.data,
+            self.roi_sigma)
+
+        roi_cls_loss = nn.CrossEntropyLoss()(roi_score, gt_roi_label)
+
+        self.roi_cm.add(roi_score, gt_roi_label.data.long())
+
+        losses = [rpn_loc_loss, rpn_cls_loss, roi_loc_loss, roi_cls_loss]
+        losses = losses + [sum(losses)]
+
+        return LossTuple(*losses)
+
+    def train_step(self, imgs, bboxes, labels, scale):
+        self.optimizer.zero_grad()
+        losses = self.forward(imgs, bboxes, labels, scale)
+        losses.total_loss.backward()
+        self.optimizer.step()
+        self.update_meters(losses)
+        return losses
+
+    def save(self, save_optimizer=False, save_path=None, **kwargs):
+        """serialize models include optimizer and other info
+        return path where the model-file is stored.
+
+        Args:
+            save_optimizer (bool): whether save optimizer.state_dict().
+            save_path (string): where to save model, if it's None, save_path
+                is generate using time str and info from kwargs.
+
+        Returns:
+            save_path(str): the path to save models.
+        """
+        save_dict = dict()
+
+        save_dict['model'] = self.faster_rcnn.state_dict()
+        save_dict['config'] = faster_rcnn_config.state_dict()
+        save_dict['other_info'] = kwargs
+
+        if save_optimizer:
+            save_dict['optimizer'] = self.optimizer.state_dict()
+
+        if save_path is None:
+            timestr = time.strftime('%m%d%H%M')
+            save_path = 'checkpoints/fasterrcnn_%s' % timestr
+            for k_, v_ in kwargs.items():
+                save_path += '_%s' % v_
+
+        torch.save(save_dict, save_path)
+        return save_path
+
+    def load(self, path, load_optimizer=True, parse_opt=False, ):
+        state_dict = torch.load(path)
+        if 'model' in state_dict:
+            self.faster_rcnn.load_state_dict(state_dict['model'])
+        else:  # legacy way, for backward compatibility
+            self.faster_rcnn.load_state_dict(state_dict)
+            return self
+        if parse_opt:
+            faster_rcnn_config.parse(state_dict['config'])
+        if 'optimizer' in state_dict and load_optimizer:
+            self.optimizer.load_state_dict(state_dict['optimizer'])
+        return self
+
+    def update_meters(self, losses):
+        loss_d = {k: v for k, v in losses._asdict().items()}
+        for key, meter in self.meters.items():
+            meter.add(loss_d[key])
+
+    def reset_meters(self):
+        for key, meter in self.meters.items():
+            meter.reset()
+        self.roi_cm.reset()
+        self.rpn_cm.reset()
+
+    def get_meter_data(self):
+        return {k: v.value()[0] for k, v in self.meters.items()}
+
+def _smooth_l1_loss(x, t, in_weight, sigma):
+    sigma2 = sigma ** 2
+    diff = in_weight * (x - t)
+    abs_diff = diff.abs()
+    flag = (abs_diff.data < (1. / sigma2)).float()
+    flag = Variable(flag)
+    y = (flag * (sigma2 / 2.) * (diff ** 2) +
+         (1 - flag) * (abs_diff - 0.5 / sigma2))
+    return y.sum()
+
+def _fast_rcnn_loc_loss(pred_loc, gt_loc, gt_label, sigma):
+    in_weight = torch.zeros(gt_loc.shape)
+    # Localization loss is calculated only for positive rois.
+    # NOTE:  unlike origin implementation,
+    # we don't need inside_weight and outside_weight, they can calculate by gt_label
+    in_weight[(gt_label > 0).view(-1, 1).expand_as(in_weight)] = 1
+    loc_loss = _smooth_l1_loss(pred_loc, gt_loc, Variable(in_weight), sigma)
+    # Normalize by total number of negtive and positive rois.
+    loc_loss /= (gt_label >= 0).sum()  # ignore gt_label==-1 for rpn_loss
+    return loc_loss

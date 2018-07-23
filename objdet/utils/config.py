@@ -6,7 +6,15 @@ class FasterRCNNConfig(object):
     def __init__(self):
         self.voc_data_dir = os.path.expanduser('~/Data/VOC/VOCdevkit/VOC2007')
         self.epoch = 1
-        self.lr = 0.1
+        # param for optimizer
+        # 优化器参数
+        self.weight_decay = 0.0005
+        self.lr_decay = 0.1
+        self.lr = 1e-3
+
+        # sigma for l1_smooth_loss
+        self.rpn_sigma = 3.
+        self.roi_sigma = 1.
 
     def parse(self, args):
         # print(args.__dict__)
