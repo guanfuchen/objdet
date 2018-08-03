@@ -15,6 +15,7 @@
 - [ICCV 2015 Tutorial on Tools for Efficient Object Detection](http://mp7.watson.ibm.com/ICCV2015/ObjectDetectionICCV2015.html) ICCV 2015中举办的关于目标检测的教程，可以参考。
 - [Deep Learning for Objects and Scenes](http://deeplearning.csail.mit.edu/) CVPR 2017关于目标检测的教程。
 - [RSA-for-object-detection-cpp-version](https://github.com/QiangXie/RSA-for-object-detection-cpp-version) [RSA-for-object-detection](https://github.com/sciencefans/RSA-for-object-detection) 相关论文[Recurrent Scale Approximation for Object Detection in CNN](https://arxiv.org/pdf/1707.09531.pdf)
+- DetNet: A Backbone network for Object Detection
 
 ---
 ### 网络实现
@@ -22,6 +23,11 @@
 - SSD，[ssd_understanding](doc/ssd_understanding.md)
 - Faster RCNN，[faster_rcnn_understanding](doc/faster_rcnn_understanding.md)
 - ...
+
+---
+### 非极大值抑制
+
+- [soft-nms](https://github.com/bharatsingh430/soft-nms)
 
 ---
 ### 数据集实现
