@@ -31,6 +31,11 @@
 - [soft-nms](https://github.com/bharatsingh430/soft-nms)
 
 ---
+### 困难样例学习
+
+- Training Region-based Object Detectors with Online Hard Example Mining，非常有效的针对Regin-based目标检测模型的在线困难样例学习策略。
+
+---
 ### 数据集实现
 
 - COCO
