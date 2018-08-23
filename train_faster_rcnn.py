@@ -49,7 +49,7 @@ if __name__ == '__main__':
     parser.add_argument('--epoch', type=int, default=1, help='train epoch [ 1 ]')
     parser.add_argument('--lr', type=float, default=0.0001, help='train learning rate [ 0.0001 ]')
     # parser.add_argument('--structure', type=str, default='fcn32s', help='use the net structure to segment [ fcn32s ResNetDUC segnet ENet drn_d_22 ]')
-    # parser.add_argument('--validate_model', type=str, default='', help='validate model path [ fcn32s_camvid_9.pkl ]')
+    # parser.addargument('--validate_model', type=str, default='', help='validate model path [ fcn32s_camvid_9.pkl ]')
     # parser.add_argument('--validate_model_state_dict', type=str, default='', help='validate model state dict path [ fcn32s_camvid_9.pt ]')
     # parser.add_argument('--dataset_path', type=str, default='', help='train dataset path [ /home/cgf/Data/CamVid ]')
     # parser.add_argument('--n_classes', type=int, default=13, help='train class num [ 13 ]')

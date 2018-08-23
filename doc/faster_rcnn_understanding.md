@@ -202,6 +202,164 @@ R-CNN训练较Faster R-CNN慢很多，具体数值如下所示：
 - [faster_rcnn VGG16 test.prototxt](https://github.com/rbgirshick/py-faster-rcnn/blob/master/models/coco/VGG16/faster_rcnn_end2end/test.prototxt)
 
 ---
+## 多任务Loss
+
+对于每一个训练RoI，都由gt类别标签u和gt目标框回归目标v标注。然后在每一个标注的RoI上应用一个多任务loss L来联合训练分类和bbox回归：
+
+$$L(p, u, t^u, v)=L_{cls}(p,u)+\lambda [u \ge 1]L_{loc}(t^u, v)$$
+
+其中$p=(p_0, \cdots, p_K)$表示最后的softmax类别输出（$K+1$类），$t^k=(t_x^k, t_y^k, t_w^k, t_h^k)$表示最后的目标框微调bboxes回归偏移输出。所以多任务loss的输入包括网络的输出$t^u$（类别u的bboxes回归偏移输出）、（K+1）类别输出概率$p$、该RoI标注的真实gt类别和该RoI标注的需要微调的boxes回归输出目标v。其中包括分类计算loss（cross entropy loss）和回归计算loss（smooth L1 loss），具体$L_{cls}(p,u)=-\log p_u$是对于真实类别u的log loss。
+
+第二个任务loss，$L_{loc}$通过类u的真实bbox回归目标$v=(v_x, v_y, v_w, v_h)$和预测的偏移目标$t^u=(t_x^u, t_y^u, t_w^u, t_h^u)$计算得到。其中该loss仅仅当非背景类别才有效，因为背景木白哦RoIs没有真实gt目标框，因此L_loc被忽略。对于bbox回归，使用smooth L1损失函数：
+
+$$L_{loc}(t^u, v)=\sum_{i \in {x,y,w,h}}{smooth_{L_1}(t_i^u-v_i)}$$
+
+遍历所有x,y,w,h都计算对应的smooth L1损失然后相加作为最后的bbox回归损失。
+
+$$smooth_{L_1}(x)=0.5 x^2\ if\ |x|<1$$
+$$ =|x|-0.5\ otherwise,$$
+
+其中smooth L1损失比R-CNN和SPPnet网络中使用的L2损失对于异常值更不敏感。当回归目标不能边界时，训练L2损失通常需要精心的调整学习了来阻止梯度爆炸。而smooth L1损失则降低了敏感性。
+
+多任务回归loss中计算的超参数$\lambda$控制了分类和回归这两个任务的平衡。本文将真实gt回归目标归一化到0均值和单位方差。其中所有的实验设置都使用$\lambda=1$。
+
+## 小批量采样
+
+微调期间，每一个SGD mini-batch由N=2图像构造而成，通常在整个数据集中遍历随机采样。本文使用R=128的mini-batches，每一张图像采样64个RoIs。其中目标建议框采样比例和背景建议框采样比例为1：3，25%的RoIs都是和gt目标建议框的IoU超过0.5，这些RoIs组成了前景目标类，也就是$u \ge 1$，剩下的RoIs从IoU为$[0.1, 0.5)$的建议框选取，这些RoIs组成了背景目标类，也就是$u = 0$，这里使用更低的阈值0.1作用和困难样本挖掘的作用一样，是为了针对那些目标附近的区域更难检测，而目标外的区域好检测的假设。另外训练期间概率为0.5对图像进行水平翻转操作来进行数据增广。
+
+## RoI池化层反向传播
+
+这里对$N=1$的mini-batch下的RoI池化网络层反向传播路由梯度进行介绍。$N>1$的情况可以直接扩展，因为前向传播中对于图像都是独立对待。
+
+$$\frac{\partial{L}}{\partial{x_i}}=\sum_{r}\sum_{j}{[i=i^{*}(r,j)]\frac{\partial{L}}{\partial{y_{rj}}}}$$
+
+其中$x_i$是第$i$个输入到RoI池化层的激活输入，并且$y_{rj}$来自于第r个RoI的第$j$个输出。RoI池化层计算$y_{rj}=x_{i*(r,j)}$，其中$i*(r,j)=argmax_{i^{\prime} \in R(r,j)}x_{i^{\prime}}$，其中$R(r,j)$是输入子窗口的输入集合。单个$x_i$也许会赋值到不同的输出$y_{rj}$中。
+
+上述反向传播解释：对于每一个mini-batch RoI r和每一个池化输出$y_{rj}$，如果这个单元被最大池化操作选中那么累加为1，在反向传播中，偏导数$\frac{\partial{L}}{\partial{y_{rj}}}$通过RoI pooling网络层上层backwards函数计算得到。
+
+
+![](http://chenguanfuqq.gitee.io/tuquan2/img_2018_5/roi_pooling.png)
+
+## SGD训练超参数
+
+softmax分类网络和bbox回归全连接层分别初始化为0均值方差为0.01和0.001的高斯分布。偏置为0。全局学习率为0.001，其中权重的学习率为lr，偏置的学习率为2*lr。在VOC数据集上训练时，上述配置训练跌倒30k mini-batch迭代，然后降低学习率为0.0001并且继续训练10k迭代。当在更大的数据集上训练时，运行SGD更多迭代。同时使用了0.9的动量和0.0005的参数decay。
+
+## 尺度不变能力
+
+为了学习尺度不变的目标检测能力：（1）通过粗暴学习（2）通过使用图像金字塔。
+
+粗暴学习中，每一张图像在训练和测试期间都处理为预先定义的像素大小。该网络直接从训练数据中学习尺度不变目标检测能力。
+
+多尺度方法相反通过使用图像金字塔提供了估计的尺度不变能力。
+
+## Fast R-CNN检测
+
+一旦对快速R-CNN网络进行微调，检测仅比运行正向传递多一点（假设对象提议是预先计算的）。在测试阶段，R典型取值为2000，每一张图像选取R个目标建议进行打分（这些目标建议没有先验目标知识，所以如何保证2000歌目标建议基本包括了目标）。
+
+对于每一个测试RoI r，前向传播输出了类后验概率分布p和预测到相对r的bbox偏移（K类每一个目标都有自己的精修的bbox预测）。我们使用估计得概率赋值检测置信度到r，$Pr(class=k|r)=p_k$。然后**对于每一类独立使用**非极大值抑制输出检测结果。
+
+## Truncated SVD
+
+Truncated SVD用来实现更快的目标检测。该方法基于观察，对于整张图像分类，fc网络层耗时较conv网络层小。但是在目标检测（Fast R-CNN），RoIs处理的数量非常大，并且几乎一半的前向传播时间在fc网络层的计算中（每一个RoIs都需要单独进行fc计算，不共享）。大的全连接网络层容易使用truncated SVD奇异值分解压缩从而得到加速。
+
+该技术主要讲权重矩阵W分解为：
+
+$$W \approx U \Sigma_t V^T $$
+
+其中$U$是左奇异值向量，$V$是右奇异值向量，$\Sigma_t$是包含奇异值的对角矩阵。那么原先计算的参数$uv$降低为$t(u+v)$，大大加速了检测速度。具体是将全连接网络层分解为两个全连接网络层，第一个全连接网络层权重矩阵为$\Sigma_t V^T$，没有偏置，第二个全连接网络层权重矩阵为$U$，偏置赋值为$W$的偏置。
+
+截断的SVD可以将检测时间减少30％以上，mAP下降很小（0.3％），并且在模型压缩后无需执行额外的微调。如果在压缩后再次进行微调，则可以进一步加速mAP的小幅下降。
+
+## 主要结果
+
+Fast R-CNN在VOC12数据集中获得了最高的mAP精度为65.7%，使用额外的数据可以提升到68.4%。当模型在VOC07和VOC12训练集中训练时，Fast R-CNN的mAP提升到了68.8%。
+
+## 微调的网络层
+
+对于SPPnet网络（较浅的网络）来说，仅仅微调全连接网络层似乎对于性能的提升很有帮助。本文基于的假设是该结果并不适用于非常深的网络。为了验证微调卷积层对于提升性能也是重要的，本文freeze 13个卷积层，仅仅学习全连接层，但是精度从66.9%下降到了61.4%，这表明通过RoI pooling网络层的学习对于深层网络精度的提升非常重要。
+
+以上实验表明卷积层的微调也是重要的，但是并不意味着需要对于所有的卷积层进行微调。对于小网络来说（S和M），发现conv1是通用的和任务无关的。允许conv1学习对于提升mAP来说没有较大的影响。对于VGG16模型来说，发现仅仅从conv3_1到之后的9个卷积层进行微调是必须的。也是因为如下的观察，首先conv2_1的更新减缓了训练速度（1.3倍），但是精度的提升仅仅只有0.3个点，conv1_1的更新浪费了GPU内存。所以本文的实现，对于VGG16来说，非跳了conv3_1和以上的卷积层，对于S和M模型微调了conv2和以上的卷积层。
+
+具体如**网络特征提取层**章节的网络图改进所示。
+
+## RPN网络
+
+RPN结构如下所示，为了生成区域建议，本文在最后一层共享的全卷积网络层输出的feature map上滑动一个小的网络。这个网络是对于输入卷积feature map的nxn的空间窗口。每一个sliding window将feature map映射到更低维度的向量中（ZF为256-d，VGG为512-d）。这个更低维度的向量输入到两个子网络中：一个box回归网络层（reg）和一个box分类网络层（cls），都是1x1的卷积层。由于在最后一层feature map上的感受野比较大因此本文使用了n=3的滑动窗口卷积层。ReLUs在nxn的卷积网络层输出应用。
+
+![](http://chenguanfuqq.gitee.io/tuquan2/img_2018_5/rpn_arch_1.png)
+
+## 平移不变的锚点
+
+每一个sliding-windows位置，同时预测k个区域建议，因此reg回归网络层输出4k编码了k个boxes。cls分类网络层输出2k对每一个目标建议编码估计目标／非目标的概率。毫无疑问每一个锚点都在sliding window的中心，并且具有对应的尺度和纵横比。本文使用了3个尺度和3个纵横比，总共每一个sliding位置上有k=9个锚点。对于WxH大小的feature map，总共有WHk个锚点。我们方法的一个重要property是平移不变性，具体体现在锚点和计算相对于锚点的区域建议函数。
+
+如果移动了一张图像中的一个物体，这proposal应该也移动了，而且相同的函数可以预测出未知的proposal。MultiBox不具备如此功能平移不变性可以减少模型大小。
+
+## 学习区域建议的Loss函数
+为了训练RPNs，对于每一个锚点都赋值了一个二分类标签（存在目标或者不存在目标）。这里赋值两种锚点为正例样本：（i）和一个gt真实box有最高的IoU，或者（ii）和gt真实box的IoU比例超过0.7（用来增加正例样本，同时这个box可以通过bbox reg精调边界框）。这里需要注意gt真实box也许赋值不同的锚点正例样本标签。将所有和gt真实boxes的IoU比例低于0.3的锚点标注为负例样本。对于非负非正的锚点不用来进行计算（相当于这些是介于object和non-object的边缘建议，对于最后的输出结果不好）。
+
+基于以上定义，本文通过下述的多任务loss来最小化目标函数，具体定义如下：
+
+$$L(\{p_i\},\{t_i\})=\frac{1}{N_{cls}}\sum_{i}{L_{cls}(p_i,p_i^{*})}+\lambda \frac{1}{N_{reg}}\sum_{i}{p_i^{*}L_{reg}(t_i, t_i^{*})}$$
+
+其中i是锚点索引，$p_i$锚点i预测的目标的概率，gt真实标签$p_i^{*}$当锚点是正例样本时赋值为1，如果锚点是负例样本时赋值为0。$t_i$表示了预测的bbox坐标偏移向量，$t_i^{*}$是gt真实box的坐标偏移向量。（**这里有个问题，就是一个锚点可能对应两个或多个gt真实值吗**）。分类loss的定义$L_{cls}(p_i,p_i^{*})$是两类的log loss，回归loss使用smooth L1损失。其中$p_i^{*}L_{reg}$意味着回归loss仅仅对于正例样本锚点被激活计算，否则为0。cls和reg网络层分别对应了$\{p_i\}$和$\{t_i\}$，这两项通过$N_{cls}$和$N_{reg}$正则化，同时任务平衡loss权重为$\lambda$。
+
+对于回归网络层，采用了如下的4个坐标参数化表示：
+
+$$t_x=(x-x_a)/w_a$$
+$$t_y=(y-y_a)/h_a$$
+$$t_w=log(w/w_a)$$
+$$t_h=log(h/h_a)$$
+$$t_x^{*}=(x^{*}-x_a)/w_a$$
+$$t_y^{*}=(y^{*}-y_a)/h_a$$
+$$t_w^{*}=log(w^{*}/w_a)$$
+$$t_h^{*}=log(h^{*}/h_a)$$
+
+其中x，y，w和h表示box中心，宽度和高度。这可以被看作是从一个锚点box到临近的gt真实box的bbox回归。
+
+## 优化
+
+本文使用和Fast R-CNN相似的方法来采样训练RPN网络，每一个mini-batch中包含了许多的正例样本和负例样本锚点。可以对所有的锚点进行优化，但是因为负例样本占了主要成分所以将导致bias。相反，这里在一个mini-batch中的一张图像中随机采样256个锚点来计算loss函数吧，其中正例和负例样本锚点比例为1:1。如果在一张图像中有少于128个正例样本，那么用负例样本pad mini-batch。
+
+本文使用0均值0.01标准差的高斯分布随机初始化新的网络层。所有其他网络层都通过ImageNet分类训练模型初始化。本文微调了ZF net的所有网络层，对于VGG网络层仅仅微调了conv3_1及以上（节省GPU内存）。在PACAL数据集上，对于60k的mini-batches使用0.001的学习率，接下来的20k mini-batches学习率为0.0001。优化器参数中动量为0.9，weight decay为0.0005。
+
+## 共享目标建议和目标检测的卷积层
+
+上述没有考虑到基于目标检测的CNN训练RPN网络。下面描述RPN和检测网络Fast R-CNN如何共享卷积特征学习。
+
+独立训练的RPN和快速R-CNN都将以不同方式修改其卷积层。因此需要设计一个策略能够在两个网络之间共享参数而不是学习两个不同的网络。定义一个同时包含RPN和Fast R-CNN联合BP优化的单一网络并不容易。其中一个原因是Fast R-CNN训练依赖于**固定**的目标建议。
+
+虽然这种联合优化是未来工作的一个有趣问题，但我们开发了一种实用的4步训练算法，通过交替优化来学习共享特征。
+
+### 4-step交替优化策略：
+- 在第一步中，我们如上所述训练RPN。 该网络使用ImageNet预先训练的模型进行初始化，并针对区域提议任务进行微调端对端。 
+- 在第二步中，我们使用由步骤1 RPN生成的提议通过快速R-CNN训练单独的检测网络。 该检测网络也由ImageNet预训练模型初始化。 此时，两个网络不共享转换层。 
+- 在第三步中，我们使用检测器网络来初始化RPN训练，但我们修复了共享转换层并仅微调RPN特有的层。 现在这两个网络共享转换层。 
+- 最后，保持共享转换层固定，我们微调快速R-CNN的fc层。 因此，两个网络共享相同的转换层并形成统一的网络。
+
+其实思路很简答，第一步训练RPN网络（feature map来自于预训练ImageNet），第二步训练Fast R-CNN（feature map来自于预训练ImageNet，RoIs来自于第一步的RPN网络），第三步微调RPN网络（feature map来自于第二步Fast R-CNN训练，仅仅微调RPN网络），第四部微调Fast R-CNN（feature map来自于第三部微调RPN网络，RoIs来自于第三步的RPN网络，仅仅微调Fast R-CNN重的fc网络层）。
+
+
+### 实现细节
+
+锚点使用的尺度为128，256和512，纵横比为1:1，1:2和2:1。
+
+**需要小心处理跨越图像边界的anchor boxes**。 在训练期间，我们忽略所有cross-boundary锚点，因此它们不会计算到代价函数。 对于典型的1000×600图像，总共将有大约20k（60x40x9）的锚。 由于忽略了cross-boundary的锚点，每个图像大约有6k个锚点用于训练。 **如果在训练中不忽略cross-boundary异常值，则会在目标中引入大的，难以纠正的误差项，并且训练不会收敛。** 然而，在测试期间，我们仍然将完全卷积RPN应用于整个图像。这可能会生成cross-boundary建议框，我们将其剪切到图像边界。
+
+**一些RPN建议彼此高度重叠**。 **为了减少冗余，我们根据其cls分数对提议区域采用非最大抑制（NMS）**。 我们将NMS的IoU阈值修正为0.7，这使得每个图像的建议区域大约为2k。 正如我们将要展示的那样，NMS不会损害最终的检测准确性，但会大大减少建议的数量。 在NMS之后，我们使用排名前N的建议区域进行检测。
+
+### Faster R-CNN试验
+
+在VOC2007+12训练集训练RPN和检测网络达到的mAP为73.2%。
+
+
+---
+## 面试问题
+
+![](http://chenguanfuqq.gitee.io/tuquan2/img_2018_5/faster_rcnn_problem_1.png)
+
+![](http://chenguanfuqq.gitee.io/tuquan2/img_2018_5/faster_rcnn_problem_2.png)
+
+---
 ## 参考资料
 
 - [Notes: From Faster R-CNN to Mask R-CNN](https://www.yuthon.com/2017/04/27/Notes-From-Faster-R-CNN-to-Mask-R-CNN/) Faster RCNN和Mask RCNN的笔记总结。
@@ -218,3 +376,4 @@ R-CNN训练较Faster R-CNN慢很多，具体数值如下所示：
 - [物体检测之从RCNN到Faster RCNN](https://blog.csdn.net/Young_Gy/article/details/78873836) 对RCNN、Fast RCNN和Faster RCNN网络的讲解非常详细。
 - [FasterRCNN代码解读](https://blog.csdn.net/Young_Gy/article/details/79155011) 以上两篇文章都是对simple faster rcnn pytorch代码的相应解读，非常有参考价值。
 - [从编程实现角度学习Faster R-CNN（附极简实现）](https://zhuanlan.zhihu.com/p/32404424)
+- [caffe frcnn](https://github.com/makefile/frcnn) Faster R-CNN / R-FCN C++ version based on Caffe 基于Caffe的Faster R-CNN和R-FCN

@@ -358,26 +358,28 @@ LossTuple = namedtuple('LossTuple',
                         ])
 
 class FasterRCNNTrainer(nn.Module):
-    """wrapper for conveniently training. return losses
-
-    The losses include:
-
-    * :obj:`rpn_loc_loss`: The localization loss for \
-        Region Proposal Network (RPN).
-    * :obj:`rpn_cls_loss`: The classification loss for RPN.
-    * :obj:`roi_loc_loss`: The localization loss for the head module.
-    * :obj:`roi_cls_loss`: The classification loss for the head module.
-    * :obj:`total_loss`: The sum of 4 loss above.
-
-    Args:
-        faster_rcnn (model.FasterRCNN):
-            A Faster R-CNN model that is going to be trained.
     """
+    方便FasterRCNN训练，输入图像imgs、标签labels、bboxes标定框和原始缩放尺度scale，输出对应的losses
+    总体的losses包含rpn_loc_loss、rpn_cls_loss、roi_loc_loss、roi_cls_loss
+    rpn_loc_loss：rpn区域建议网络的定位loss（前景定位微调loss）
+    rpn_cls_loss：rpn区域建议网络的分类loss（前景和背景的类无关分类loss）
+    roi_los_loss：ROIHead模块roi的定位loss（每一类相关的定位loss）
+    roi_cls_loss：ROIHead模块roi的分类loss（每一类的分类loss）
 
+    输入：
+        faster_rcnn：FasterRCNN
+    输出：
+        total_loss：total_loss=rpn_loc_loss+rpn_cls_loss+roi_loc_loss_roi_cls_loss
+    """
     def __init__(self, faster_rcnn):
+        """
+        :type faster_rcnn: FasterRCNN
+        """
         super(FasterRCNNTrainer, self).__init__()
 
-        self.faster_rcnn = faster_rcnn
+        self.faster_rcnn = faster_rcnn # faster_rcnn模块用来进行目标检测
+
+        # 设置rpn和roi的sigma参数
         self.rpn_sigma = faster_rcnn_config.rpn_sigma
         self.roi_sigma = faster_rcnn_config.roi_sigma
 
@@ -454,7 +456,7 @@ class FasterRCNNTrainer(nn.Module):
         gt_rpn_loc, gt_rpn_label = self.anchor_target_creator(bbox, anchor, img_size)
         gt_rpn_label = Variable(gt_rpn_label).long()
         gt_rpn_loc = Variable(gt_rpn_loc)
-        rpn_loc_loss = _fast_rcnn_loc_loss(
+        rpn_loc_loss = fast_rcnn_loc_loss(
             rpn_loc,
             gt_rpn_loc,
             gt_rpn_label.data,
@@ -473,7 +475,7 @@ class FasterRCNNTrainer(nn.Module):
         gt_roi_label = Variable(gt_roi_label).long()
         gt_roi_loc = Variable(gt_roi_loc)
 
-        roi_loc_loss = _fast_rcnn_loc_loss(
+        roi_loc_loss = fast_rcnn_loc_loss(
             roi_loc.contiguous(),
             gt_roi_loc,
             gt_roi_label.data,
@@ -553,7 +555,14 @@ class FasterRCNNTrainer(nn.Module):
     def get_meter_data(self):
         return {k: v.value()[0] for k, v in self.meters.items()}
 
-def _smooth_l1_loss(x, t, in_weight, sigma):
+def smooth_l1_loss(x, t, in_weight, sigma):
+    """
+    :param x: smooth l1 loss
+    :param t:
+    :param in_weight:
+    :param sigma:
+    :return:
+    """
     sigma2 = sigma ** 2
     diff = in_weight * (x - t)
     abs_diff = diff.abs()
@@ -563,13 +572,14 @@ def _smooth_l1_loss(x, t, in_weight, sigma):
          (1 - flag) * (abs_diff - 0.5 / sigma2))
     return y.sum()
 
-def _fast_rcnn_loc_loss(pred_loc, gt_loc, gt_label, sigma):
+def fast_rcnn_loc_loss(pred_loc, gt_loc, gt_label, sigma):
     in_weight = torch.zeros(gt_loc.shape)
     # Localization loss is calculated only for positive rois.
     # NOTE:  unlike origin implementation,
     # we don't need inside_weight and outside_weight, they can calculate by gt_label
     in_weight[(gt_label > 0).view(-1, 1).expand_as(in_weight)] = 1
-    loc_loss = _smooth_l1_loss(pred_loc, gt_loc, Variable(in_weight), sigma)
+
+    loc_loss = smooth_l1_loss(pred_loc, gt_loc, Variable(in_weight), sigma) # smooth l1 loss输入
     # Normalize by total number of negtive and positive rois.
     loc_loss /= (gt_label >= 0).sum()  # ignore gt_label==-1 for rpn_loss
     return loc_loss
