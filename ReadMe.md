@@ -5,6 +5,7 @@
 
 这个仓库旨在实现常用的目标检测算法，主要参考如下：
 - [ssd.pytorch](https://github.com/amdegroot/ssd.pytorch)
+- [Object-Detection](http://songit.cn/Object-Detection.html)
 - ...
 
 ---
