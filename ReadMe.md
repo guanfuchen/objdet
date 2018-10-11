@@ -8,7 +8,15 @@
 - [Object-Detection](http://songit.cn/Object-Detection.html)
 - [2015-10-09-object-detection.md](https://github.com/handong1587/handong1587.github.io/blob/master/_posts/deep_learning/2015-10-09-object-detection.md) handong收集的相关目标检测论文目录；
 - [awesome-object-detection](https://github.com/amusi/awesome-object-detection)，awesome系列，参考合并了handong相关目录；
+- [目标检测 Object Detection](http://www.xzhewei.com/Paper-Archives-%E8%AE%BA%E6%96%87%E9%9B%86/Object-Detection/#Is-Faster-R-CNN-Doing-Well-for-Pedestrian-Detection) 博客整理收集的相关资料；
+- [Review of Deep Learning Algorithms for Object Detection](https://medium.com/comet-app/review-of-deep-learning-algorithms-for-object-detection-c1f3d437b852) 相关目标检测DL算法综述；
+- [deep_learning_object_detection](https://github.com/hoya012/deep_learning_object_detection)，其中增加了可视化paper表格，非常直观；
+- Deep Learning for Generic Object Detection: A Survey，深度学习通用目标检测调研；
 - ...
+
+> 图片来自于[deep_learning_object_detection](https://github.com/hoya012/deep_learning_object_detection)
+
+![](http://chenguanfuqq.gitee.io/tuquan2/img_2018_5/deep_learning_object_detection_history.png)
 
 ---
 ### 论文资料
@@ -20,6 +28,28 @@
 - [RSA-for-object-detection-cpp-version](https://github.com/QiangXie/RSA-for-object-detection-cpp-version) [RSA-for-object-detection](https://github.com/sciencefans/RSA-for-object-detection) 相关论文[Recurrent Scale Approximation for Object Detection in CNN](https://arxiv.org/pdf/1707.09531.pdf)
 - DetNet: A Backbone network for Object Detection
 - 小目标检测，参考如下
+- 遮挡目标检测，参考如下
+- 视频目标检测，参考[video_obj](https://github.com/guanfuchen/video_obj)
+- domain目标检测，参考如下
+- 非极大值处理，参考如下
+- 弱监督目标检测，参考如下
+- 困难样本采样策略，参考如下
+- 文本检测，参考如下
+- A unified multi-scale deep convolutional neural network for fast object detection
+- How Far are We from Solving Pedestrian Detection? **行人检测**
+- Taking a Deeper Look at Pedestrians **行人检测**
+- Integralchannel features **行人检测**
+- Fast Feature Pyramids for Object Detection **行人检测**
+- What Can Help Pedestrian Detection? **行人检测**
+- Citypersons: A di- verse dataset for pedestrian detection **行人检测**数据集
+- DenseBox: Unifying Landmark Localization with End to End Object Detection，不使用anchor的检测方法
+- UnitBox: An Advanced Object Detection Network
+- Discriminative models for multi-class object layout
+- Learning Transferable Architectures for Scalable Image Recognition，自学网络结构；
+- Single-Shot Refinement Neural Network for Object Detection，S3FD和RefineDet论文都是同一个作者；
+- HyperNet: Towards Accurate Region Proposal Generation and Joint Object Detection
+- Hypercolumns for Object Segmentation and Fine-grained Localization
+
 
 ---
 ### 小目标检测
@@ -34,6 +64,47 @@
 - [CMS-RCNN: Contextual Multi-Scale Region-based CNN for Unconstrained Face Detection](https://arxiv.org/abs/1606.05413) 集成人体上下文信息来帮助推理人脸位置；
 - [Finding Tiny Faces](https://arxiv.org/abs/1612.04402)，多级图像金字塔进行multi-scale训练和测试；
 - [S3FD: Single Shot Scale-invariant Face Detector](https://arxiv.org/abs/1708.05237) single shot尺度等变的人脸检测器；
+
+---
+### 遮挡目标检测
+
+- Repulsion Loss: Detecting Pedestrians in a Crowd
+
+---
+### domain目标检测
+- [Cross-Domain Weakly-Supervised Object Detection through Progressive Domain Adaptation](https://naoto0804.github.io/cross_domain_detection/)
+
+---
+### 文本检测
+- Deep Direct Regression for Multi-Oriented Scene Text Detection
+- TextBoxes: A Fast Text Detector with a Single Deep Neural Network
+- Detecting Text in Natural Image with Connectionist Text Proposal Network
+- R2CNN: Rotational Region CNN for Orientation Robust Scene Text Detection
+- EAST: An Efficient and Accurate Scene Text Detector
+- Detecting Oriented Text in Natural Images by Linking Segments
+- Arbitrary-Oriented Scene Text Detection via Rotation Proposals
+- Scene Text Detection via Holistic, Multi-Channel Prediction
+- Deep Matching Prior Network: Toward Tighter Multi-oriented Text Detection
+
+---
+### 弱监督目标检测
+- Weakly Supervised Deep Detection Networks
+
+---
+### 非极大值抑制
+
+- Learning non-maximum suppression
+- Improving Object Detection With One Line of Code，soft-nms
+
+---
+### 困难样本采样策略
+
+- Loss Rank Mining: A General Hard Example Mining Method for Real-time Detectors
+
+---
+### 回归框loss
+
+目前常用的回归框loss有l2 loss，smooth l1 loss和IoU loss。
 
 ---
 ### 网络实现

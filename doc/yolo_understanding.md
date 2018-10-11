@@ -230,3 +230,4 @@ $$b_h=p_h e^{t_h}$$
 - YOLO v1模型参考[yolov1.cfg](https://github.com/pjreddie/darknet/blob/master/cfg/yolov1.cfg)
 - [Real-time Object Detection with YOLO, YOLOv2 and now YOLOv3](https://medium.com/@jonathan_hui/real-time-object-detection-with-yolo-yolov2-28b1b93e2088) medium针对YOLO的解读，基本涵盖了论文所有的要点。
 - [目标检测（九）--YOLO v1,v2,v3](https://blog.csdn.net/App_12062011/article/details/77554288)
+- [caffe-yolov3](https://github.com/ChenYingpeng/caffe-yolov3)，使用caffe实现的yolov3；
