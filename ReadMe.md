@@ -4,6 +4,7 @@
 ## object detection algorithms
 
 这个仓库旨在实现常用的目标检测算法，主要参考如下：
+- [mmdetection](https://github.com/open-mmlab/mmdetection)，参考CUHK检测框架的思路。
 - [ssd.pytorch](https://github.com/amdegroot/ssd.pytorch)
 - [Object-Detection](http://songit.cn/Object-Detection.html)
 - [2015-10-09-object-detection.md](https://github.com/handong1587/handong1587.github.io/blob/master/_posts/deep_learning/2015-10-09-object-detection.md) handong收集的相关目标检测论文目录；
@@ -35,6 +36,8 @@
 - 弱监督目标检测，参考如下
 - 困难样本采样策略，参考如下
 - 文本检测，参考如下
+- 类别不平衡目标检测，参考如下
+- 小数据集目标检测，参考如下
 - A unified multi-scale deep convolutional neural network for fast object detection
 - How Far are We from Solving Pedestrian Detection? **行人检测**
 - Taking a Deeper Look at Pedestrians **行人检测**
@@ -85,6 +88,16 @@
 - Arbitrary-Oriented Scene Text Detection via Rotation Proposals
 - Scene Text Detection via Holistic, Multi-Channel Prediction
 - Deep Matching Prior Network: Toward Tighter Multi-oriented Text Detection
+
+---
+### 类别不平衡目标检测
+
+- Solution for Large-Scale Hierarchical Object Detection Datasets with Incomplete Annotation and Data Imbalance
+
+---
+### 小数据集目标检测
+
+- Comparison Detector: A novel object detection method for small dataset
 
 ---
 ### 弱监督目标检测
